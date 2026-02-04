@@ -15,7 +15,7 @@ class SmoothLandmark:
         self.visibility = 0.0
 
     def _init_kalman(self):
-        state = np.zeros((2, 1), dtype=np.float64)  # всегда (2,1)
+        state = np.array([[0.0], [0.0]], dtype=np.float64)  # строго (2,1)
         P = np.eye(2, dtype=np.float64) * 1000.0
         F = np.array([[1.0, 1.0], [0.0, 1.0]], dtype=np.float64)
         H = np.array([[1.0, 0.0]], dtype=np.float64)
@@ -25,33 +25,33 @@ class SmoothLandmark:
 
     def _kalman_update(self, kf, measurement: float):
         try:
-            # Гарантируем, что state имеет форму (2,1)
             state = kf['state']
-            if state.shape != (2, 1):
-                logging.warning(f"Неправильная форма state: {state.shape} → исправляем")
-                state = np.reshape(state, (2, 1))
+            if not isinstance(state, np.ndarray) or len(state.shape) != 2 or state.shape != (2, 1):
+                logging.warning("Восстановление состояния Kalman")
+                state = np.array([[float(measurement)], [0.0]], dtype=np.float64)
+                kf['state'] = state
+                kf['P'] = np.eye(2, dtype=np.float64) * 1000.0
 
-            # Predict
             kf['state'] = kf['F'] @ state
             kf['P'] = kf['F'] @ kf['P'] @ kf['F'].T + kf['Q']
 
-            # Update
-            meas = np.array([[measurement]], dtype=np.float64)  # (1,1)
+            meas = np.array([[float(measurement)]], dtype=np.float64)
             y = meas - kf['H'] @ kf['state']
             S = kf['H'] @ kf['P'] @ kf['H'].T + kf['R']
-            K = (kf['P'] @ kf['H'].T) / S
+            K = (kf['P'] @ kf['H'].T) / (S + 1e-10)  # защита от 0
             kf['state'] = kf['state'] + K * y
             kf['P'] = (np.eye(2) - K @ kf['H']) @ kf['P']
 
-            return kf['state'][0, 0]
+            return float(kf['state'][0, 0])
+
         except Exception as e:
-            logging.error(f"Ошибка в Kalman update: {e}, measurement={measurement}")
-            return measurement  # fallback — берём сырое значение
+            logging.error(f"Kalman крашнулся: {e}. Беру сырое значение.")
+            return float(measurement)
 
     def update(self, x: float, y: float, z: float, visibility: float = 1.0, alpha_vis: float = 0.7):
-        self.kf_states[0]['state'] = self._kalman_update(self.kf_states[0], x)
-        self.kf_states[1]['state'] = self._kalman_update(self.kf_states[1], y)
-        self.kf_states[2]['state'] = self._kalman_update(self.kf_states[2], z)
+        self.kf_states[0]['state'][0, 0] = self._kalman_update(self.kf_states[0], x)
+        self.kf_states[1]['state'][0, 0] = self._kalman_update(self.kf_states[1], y)
+        self.kf_states[2]['state'][0, 0] = self._kalman_update(self.kf_states[2], z)
 
         vis = float(visibility) if visibility is not None else 1.0
         self.visibility = self.visibility * alpha_vis + vis * (1 - alpha_vis)
@@ -66,7 +66,7 @@ class SmoothLandmark:
 
     def reset(self):
         for kf in self.kf_states:
-            kf['state'] = np.zeros((2, 1), dtype=np.float64)
+            kf['state'] = np.array([[0.0], [0.0]], dtype=np.float64)
             kf['P'] = np.eye(2, dtype=np.float64) * 1000.0
         self.visibility = 0.0
 

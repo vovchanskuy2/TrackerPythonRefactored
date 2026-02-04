@@ -7,6 +7,7 @@ import threading
 from detector import create_detectors, download_models, POSE_CONNECTIONS, HAND_CONNECTIONS, FACE_CONTOURS_SIMPLIFIED
 from smoother import Smoother
 from capture import get_capture
+from udp_sender import UDPSender
 
 logging.basicConfig(level=logging.INFO)
 
@@ -65,6 +66,7 @@ def detection_thread(pose_det, hand_det, face_det, smoother, cap, stop_event):
         if smoother.should_process(current_time):
             ret, frame = cap.read()
             if not ret:
+                time.sleep(0.01)
                 continue
             
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -108,6 +110,7 @@ def main(args):
     cap = get_capture(source=args.source)
     pose_det, hand_det, face_det = create_detectors()
     smoother = Smoother(buffer_size=10, target_fps=args.target_fps, process_fps=args.process_fps, mirror_x=args.mirror_x, invert_z=args.invert_z)
+    udp_sender = UDPSender(ip="127.0.0.1", port=5005)  # localhost:5005 — можно изменить
 
     stop_event = threading.Event()
     det_thread = threading.Thread(target=detection_thread, args=(pose_det, hand_det, face_det, smoother, cap, stop_event))
@@ -118,32 +121,36 @@ def main(args):
     current_fps = 0
 
     try:
+        cv2.namedWindow('Tracking', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('Tracking', 1280, 720)
         while True:
             current_time = time.time()
             ret, frame = cap.read()
+
             if not ret:
+                logging.warning("Не удалось получить кадр")
                 break
-            frame = cv2.flip(frame, 1) if args.debug else frame
+            frame = cv2.flip(frame, 1)
             display_frame = frame.copy()
 
             if smoother.should_interpolate(current_time):
                 pose, hands, face = smoother.get_interpolated(current_time)
-                if args.debug:
-                    display_frame = draw_all(display_frame, pose, hands, face)
+                if pose or hands or face:  # отправляем только если есть данные
+                    udp_sender.send_pose_data(pose, hands, face, current_time)
 
-            if args.debug:
-                fps_counter += 1
-                if current_time - last_fps_time >= 1.0:
-                    current_fps = fps_counter
-                    fps_counter = 0
-                    last_fps_time = current_time
+            fps_counter += 1
+        #    if current_time - last_fps_time >= 1.0:
+            current_fps = fps_counter
+            fps_counter = 0
+            last_fps_time = current_time  
 
-                cv2.putText(display_frame, f"FPS: {current_fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                cv2.imshow('Tracking', display_frame)
-                if cv2.waitKey(1) & 0xFF in [ord('q'), 27]:
-                    break
+            display_frame = draw_all(display_frame, pose, hands, face)
+            cv2.putText(display_frame, f"FPS: {current_fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.imshow('Tracking', display_frame)
+            if cv2.waitKey(1) & 0xFF in [ord('q'), 27]:
+                break
 
-            time.sleep(1 / args.target_fps)
+            time.sleep(0.01)
 
     finally:
         stop_event.set()
@@ -154,6 +161,7 @@ def main(args):
         hand_det.close()
         face_det.close()
         logging.info("Ресурсы освобождены.")
+        udp_sender.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tracker")
