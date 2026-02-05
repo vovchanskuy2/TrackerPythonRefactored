@@ -23,6 +23,7 @@ class UDPSender:
             "hands": [self._to_list_of_dicts(hand) for hand in hands if hand] if hands else [],
             "face": self._to_list_of_dicts(face) if face else []
         }
+        print (timestamp)
         try:
             message = json.dumps(data).encode('utf-8')
             self.sock.sendto(message, (self.ip, self.port))

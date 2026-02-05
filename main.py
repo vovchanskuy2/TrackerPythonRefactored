@@ -137,7 +137,7 @@ def main(args):
                 pose, hands, face = smoother.get_interpolated(current_time)
                 if pose or hands or face:  # отправляем только если есть данные
                     udp_sender.send_pose_data(pose, hands, face, current_time)
-
+                    
             fps_counter += 1
         #    if current_time - last_fps_time >= 1.0:
             current_fps = fps_counter
