@@ -1,6 +1,7 @@
 import socket
 import json
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 
@@ -23,12 +24,15 @@ class UDPSender:
             "hands": [self._to_list_of_dicts(hand) for hand in hands if hand] if hands else [],
             "face": self._to_list_of_dicts(face) if face else []
         }
-        print (timestamp)
         try:
             message = json.dumps(data).encode('utf-8')
             self.sock.sendto(message, (self.ip, self.port))
         except Exception as e:
             logging.error(f"Ошибка отправки UDP: {e}")
+        time.sleep(0.1)
+        
+        with open('sendedjson.json', 'w') as f:
+            f.write(json.dumps(data))
 
     def _to_list_of_dicts(self, landmarks):
         if not landmarks:

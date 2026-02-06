@@ -1,4 +1,4 @@
-import cv2
+import cv2 #.\venv\Scripts\Activate
 import mediapipe as mp
 import time
 import logging
