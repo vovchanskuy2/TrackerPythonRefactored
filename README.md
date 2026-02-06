@@ -1,1 +1,1 @@
-python TrackerPythonRefactored/main.py --debug
+python TrackerPythonRefactored/main.py
