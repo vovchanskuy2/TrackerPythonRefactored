@@ -21,7 +21,8 @@ class UDPSender:
         data = {
             "timestamp": timestamp,
             "pose": self._to_list_of_dicts(pose) if pose else [],
-            "hands": [self._to_list_of_dicts(hand) for hand in hands if hand] if hands else [],
+            "left_hand": self._to_list_of_dicts(hands[0]) if hands and len(hands) > 0 and hands[0] else [],
+            "right_hand": self._to_list_of_dicts(hands[1]) if hands and len(hands) > 1 and hands[1] else [],
             "face": self._to_list_of_dicts(face) if face else []
         }
         try:
@@ -30,14 +31,32 @@ class UDPSender:
         except Exception as e:
             logging.error(f"Ошибка отправки UDP: {e}")
         time.sleep(0.1)
-        
+        #Check prints
         with open('sendedjson.json', 'w') as f:
             f.write(json.dumps(data))
 
     def _to_list_of_dicts(self, landmarks):
         if not landmarks:
             return []
-        return [{"x": lm[0], "y": lm[1], "z": lm[2], "vis": lm[3]} for lm in landmarks]
 
+        result = []
+
+        # если landmarks = [ [ (x,y,z,v), ... ] ]
+        # убираем лишний уровень
+        if len(landmarks) == 1 and isinstance(landmarks[0], list):
+            landmarks = landmarks[0]
+
+        for lm in landmarks:
+            # lm = (x,y,z,vis)
+            result.append({
+                "x": float(lm[0]),
+                "y": float(lm[1]),
+                "z": float(lm[2]),
+                "vis": float(lm[3])
+            })
+
+        return result
+
+        
     def close(self):
         self.sock.close()
