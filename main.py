@@ -4,7 +4,7 @@ import time
 import logging
 import argparse
 import threading
-from detector import create_detectors, download_models, POSE_CONNECTIONS, HAND_CONNECTIONS, FACE_CONTOURS_SIMPLIFIED
+from detector import create_detectors, download_models, POSE_CONNECTIONS, HAND_CONNECTIONS, FACE_CONTOURS_SIMPLIFIED, SELECTED_FACE_INDICES
 from smoother import Smoother
 from capture import get_capture
 from udp_sender import UDPSender
@@ -135,8 +135,12 @@ def main(args):
 
             if smoother.should_interpolate(current_time):
                 pose, hands, face = smoother.get_interpolated(current_time)
+                filtered_face = None
+                if face and face[0]:  # Если лицо обнаружено и не пустое
+                    filtered_face = [[face[0][i] for i in SELECTED_FACE_INDICES if i < len(face[0])]]
+
                 if pose or hands or face:  # отправляем только если есть данные
-                    udp_sender.send_pose_data(pose, hands, face, current_time)
+                        udp_sender.send_pose_data(pose, hands, filtered_face, current_time)
                     
             fps_counter += 1
         #    if current_time - last_fps_time >= 1.0:

@@ -53,6 +53,9 @@ FACE_CONTOURS_SIMPLIFIED = [
     (81, 42), (42, 183), (183, 78),
 ]
 
+# Уникальные индексы точек из упрощённых контуров (овал, глаза, губы) — ~93 шт.
+SELECTED_FACE_INDICES = sorted(set(idx for pair in FACE_CONTOURS_SIMPLIFIED for idx in pair))
+
 def download_models():
     """Скачивает модели hands и face, если их нет (pose уже должна быть)."""
     models = {
