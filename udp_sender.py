@@ -1,62 +1,72 @@
+# udp_sender.py
 import socket
 import json
 import logging
-import time
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
+
 
 class UDPSender:
     def __init__(self, ip="127.0.0.1", port=5005):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.ip = ip
         self.port = port
-        logging.info(f"UDP sender готов: {ip}:{port}")
 
-    def send_pose_data(self, pose, hands, face, timestamp):
+    def send(self, data):
         """
-        pose: list of 33 dicts или list of tuples (x,y,z,vis)
-        hands: list of 2 lists (left/right), каждая по 21
-        face: list of 478 tuples
-        """
-        data = {
-            "timestamp": timestamp,
-            "pose": self._to_list_of_dicts(pose) if pose else [],
-            "left_hand": self._to_list_of_dicts(hands[0]) if hands and len(hands) > 0 and hands[0] else [],
-            "right_hand": self._to_list_of_dicts(hands[1]) if hands and len(hands) > 1 and hands[1] else [],
-            "face": self._to_list_of_dicts(face) if face else []
+        data:
+        {
+            "t": float,
+            "bones": {
+                name: [x,y,z,w]  # quaternion (MediaPipe space)
+            },
+            "curves": {
+                name: float  # blendshape values
+            }
         }
+        """
+
+        ue_bones = {}
+        for name, quat in data.get("bones", {}).items():
+            ue_bones[name] = [float(v) for v in self._convert_quat_to_ue(quat)]
+
+        packet = {
+            "t": data.get("t", 0.0),
+            "bones": ue_bones,
+            "curves": {k: float(v) for k, v in data.get("curves", {}).items()}
+        }
+
         try:
-            message = json.dumps(data).encode('utf-8')
-            self.sock.sendto(message, (self.ip, self.port))
+            msg = json.dumps(packet, separators=(',', ':')).encode('utf-8')
+            self.sock.sendto(msg, (self.ip, self.port))
+
+            # DEBUG (отключишь потом)
+            with open("debug_udp.json", "w") as f:
+                f.write(json.dumps(packet))
+
         except Exception as e:
-            logging.error(f"Ошибка отправки UDP: {e}")
-        time.sleep(0.1)
-        #Check prints
-        with open('sendedjson.json', 'w') as f:
-            f.write(json.dumps(data))
+            logging.error(f"UDP send error: {e}")
 
-    def _to_list_of_dicts(self, landmarks):
-        if not landmarks:
-            return []
+    # ---------- CORE PART ----------
 
-        result = []
+    def _convert_quat_to_ue(self, q):
+        """
+        Конвертация quaternion из MediaPipe в Unreal систему координат
+        q = [x, y, z, w]
+        """
 
-        # если landmarks = [ [ (x,y,z,v), ... ] ]
-        # убираем лишний уровень
-        if len(landmarks) == 1 and isinstance(landmarks[0], list):
-            landmarks = landmarks[0]
+        x, y, z, w = q
 
-        for lm in landmarks:
-            # lm = (x,y,z,vis)
-            result.append({
-                "x": float(lm[0]),
-                "y": float(lm[1]),
-                "z": float(lm[2]),
-                "vis": float(lm[3])
-            })
+        # Перестановка осей
+        ue_x = z
+        ue_y = x
+        ue_z = -y
+        ue_w = w
 
-        return result
+        return [ue_x, ue_y, ue_z, ue_w]
 
-        
+    # --------------------------------
+
     def close(self):
         self.sock.close()
