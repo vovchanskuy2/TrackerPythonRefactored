@@ -15,6 +15,6 @@ Requirements
 - Python 3.8+
 
 Installation
-git clone https://github.com/vovchanskuy2/TrackerPythonRefactored
-cd TrackerPythonRefactored
-pip install -r requirements.txt
+git clone https://github.com/vovchanskuy2/TrackerPythonRefactored;
+cd TrackerPythonRefactored;
+pip install -r requirements.txt.
